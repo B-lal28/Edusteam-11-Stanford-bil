@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calorimeter Heat Simulation</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --accent: #22d3ee;
+      --accent-2: #f59e0b;
+      --grid: #1f2937;
+      --ok: #10b981;
+      --warn: #f59e0b;
+    }
+    html, body {
+      height: 100%;
+    }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(180deg, #0b1220 0%, #0e1325 50%, #0b1220 100%);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px 48px 16px;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 14px 0;
+      letter-spacing: 0.2px;
+    }
+    p.subtitle {
+      margin: 0 0 18px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .panel {
+      background: rgba(17, 24, 39, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      overflow: hidden;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 10px 12px;
+      padding: 14px;
+      align-items: end;
+    }
+    .controls .field {
+      grid-column: span 3;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .controls .field.small {
+      grid-column: span 2;
+    }
+    .controls .field.wide {
+      grid-column: span 4;
+    }
+    label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input, select {
+      background: #101827;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+      outline: none;
+      font-size: 14px;
+      transition: border-color 0.15s ease;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent);
+    }
+    .buttons {
+      display: flex;
+      gap: 8px;
+      padding: 0 14px 14px 14px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #0ea5e9;
+      color: white;
+      border: 0;
+      padding: 9px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.2px;
+    }
+    button.secondary { background: #334155; }
+    button.warn { background: #ef4444; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 10px 12px;
+      padding: 14px;
+    }
+    .stat {
+      grid-column: span 3;
+      background: rgba(2,6,23,0.35);
+      border: 1px solid rgba(148,163,184,0.12);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .stat h3 {
+      margin: 0 0 6px 0;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .stat .value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 14px 16px 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .key {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .swatch {
+      width: 14px;
+      height: 3px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+    canvas {
+      width: 100%;
+      height: 380px;
+      display: block;
+      background: radial-gradient(1200px 400px at 50% -50%, rgba(34,211,238,0.06), transparent),
+                  radial-gradient(900px 300px at 20% -30%, rgba(245,158,11,0.06), transparent),
+                  #0b1220;
+      border-top: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .footnote {
+      padding: 10px 14px 0 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 920px) {
+      .controls .field { grid-column: span 6; }
+      .controls .field.small { grid-column: span 4; }
+      .controls .field.wide { grid-column: span 12; }
+      .stat { grid-column: span 6; }
+    }
+    @media (max-width: 580px) {
+      .controls .field { grid-column: span 12; }
+      .stat { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Calorimeter Heat Simulation</h1>
+    <p class="subtitle">Mix a heated metal with water inside an ideal calorimeter and watch temperatures evolve over time. Adjust material, masses, temperatures, and any heat lost by the metal before insertion.</p>
+
+    <div class="panel">
+      <div class="controls">
+        <div class="field">
+          <label for="material">Material (metal)</label>
+          <select id="material">
+            <option value="gold">Gold</option>
+            <option value="copper" selected>Copper</option>
+            <option value="iron">Iron</option>
+            <option value="zinc">Zinc</option>
+            <option value="magnesium">Magnesium</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="metalMass">Metal mass (g)</label>
+          <input id="metalMass" type="number" value="100" min="1" step="1">
+        </div>
+
+        <div class="field">
+          <label for="metalT0">Metal initial temperature (°C)</label>
+          <input id="metalT0" type="number" value="90" step="0.1">
+        </div>
+
+        <div class="field wide">
+          <label for="qLoss">Heat lost before insertion Q_loss (J)</label>
+          <input id="qLoss" type="number" value="0" min="0" step="10">
+        </div>
+
+        <div class="field">
+          <label for="waterMass">Water mass (g)</label>
+          <input id="waterMass" type="number" value="200" min="1" step="1">
+        </div>
+
+        <div class="field">
+          <label for="waterT0">Water initial temperature (°C)</label>
+          <input id="waterT0" type="number" value="25" step="0.1">
+        </div>
+
+        <div class="field small">
+          <label for="kCoupling">Thermal coupling k (W/K)</label>
+          <input id="kCoupling" type="number" value="12" min="0.1" step="0.1">
+        </div>
+
+        <div class="field small">
+          <label for="dt">Time step Δt (s)</label>
+          <input id="dt" type="number" value="0.1" min="0.01" step="0.01">
+        </div>
+
+        <div class="field small">
+          <label for="totalTime">Total time (s)</label>
+          <input id="totalTime" type="number" value="240" min="1" step="1">
+        </div>
+      </div>
+
+      <div class="buttons">
+        <button id="applyBtn" class="secondary">Apply parameters</button>
+        <button id="startBtn">Start</button>
+        <button id="pauseBtn" class="secondary">Pause</button>
+        <button id="resetBtn" class="warn">Reset</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <h3>Effective metal T after Q_loss</h3>
+          <div class="value"><span id="metalT0Eff">–</span> °C</div>
+        </div>
+        <div class="stat">
+          <h3>Equilibrium T (no losses after mixing)</h3>
+          <div class="value"><span id="eqT">–</span> °C</div>
+        </div>
+        <div class="stat">
+          <h3>Heat lost by metal (to water)</h3>
+          <div class="value"><span id="qMetal">–</span> J</div>
+        </div>
+        <div class="stat">
+          <h3>Heat gained by water</h3>
+          <div class="value"><span id="qWater">–</span> J</div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="key"><span class="swatch" style="background: var(--accent);"></span> Water temperature</span>
+        <span class="key"><span class="swatch" style="background: var(--accent-2);"></span> Metal temperature</span>
+        <span class="key"><span class="swatch" style="background: #7c3aed; width:8px; height:8px; border-radius:50%;"></span> Predicted equilibrium</span>
+      </div>
+
+      <canvas id="plot" width="1100" height="420"></canvas>
+      <div class="footnote">Model assumptions: closed calorimeter (no external heat exchange during mixing), perfectly mixed water, and fixed internal coupling k. Energy is conserved between metal and water; the pre-insertion loss lowers the metal's effective initial temperature.</div>
+    </div>
+  </div>
+
+  <script>
+    // Physical constants (approximate J/kg·K)
+    const MATERIALS = {
+      gold: { name: 'Gold', specificHeat: 129 },
+      copper: { name: 'Copper', specificHeat: 385 },
+      iron: { name: 'Iron', specificHeat: 449 },
+      zinc: { name: 'Zinc', specificHeat: 388 },
+      magnesium: { name: 'Magnesium', specificHeat: 1020 }
+    };
+    const WATER_SPECIFIC_HEAT = 4186; // J/kg·K
+
+    // Small utilities
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+    function num(v, fallback) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    }
+    function fmt(n, digits = 2) {
+      return Number(n).toFixed(digits);
+    }
+
+    // Simulation core: two lumps exchanging heat with coupling k
+    class CalorimeterSimulation {
+      constructor(params) {
+        this.params = params;
+        this.reset();
+      }
+
+      reset() {
+        const p = this.params;
+        this.time = 0;
+        this.metalTemp = p.effectiveMetalT0; // already includes pre-insertion loss
+        this.waterTemp = p.waterT0;
+        this.times = [0];
+        this.metalTemps = [this.metalTemp];
+        this.waterTemps = [this.waterTemp];
+        this.cumulativeQToWater = 0; // track numerical energy transfer
+      }
+
+      step() {
+        const p = this.params;
+        const tempDifference = this.metalTemp - this.waterTemp;
+        const heatFlowRate = p.kCoupling * tempDifference; // W = J/s
+        const dQ = heatFlowRate * p.dt; // J
+
+        // Update temperatures preserving energy conservation
+        const metalDeltaT = -dQ / (p.metalMassKg * p.metalSpecificHeat);
+        const waterDeltaT = +dQ / (p.waterMassKg * WATER_SPECIFIC_HEAT);
+
+        this.metalTemp += metalDeltaT;
+        this.waterTemp += waterDeltaT;
+        this.time = clamp(this.time + p.dt, 0, p.totalTime);
+        this.cumulativeQToWater += dQ;
+
+        this.times.push(this.time);
+        this.metalTemps.push(this.metalTemp);
+        this.waterTemps.push(this.waterTemp);
+      }
+
+      runUntilEnd() {
+        const steps = Math.ceil((this.params.totalTime - this.time) / this.params.dt);
+        for (let i = 0; i < steps; i++) this.step();
+      }
+    }
+
+    // Minimal plotting on Canvas
+    class LinePlot {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.padding = { left: 54, right: 16, top: 16, bottom: 36 };
+      }
+
+      setData(times, waterTemps, metalTemps, eqTemp, tMax) {
+        this.times = times;
+        this.waterTemps = waterTemps;
+        this.metalTemps = metalTemps;
+        this.eqTemp = eqTemp;
+        this.tMax = tMax;
+
+        // Determine y-bounds from all curve values plus margin
+        const allY = waterTemps.concat(metalTemps, [eqTemp]);
+        let yMin = Math.min(...allY);
+        let yMax = Math.max(...allY);
+        if (yMax - yMin < 1) {
+          const mid = 0.5 * (yMax + yMin);
+          yMax = mid + 0.5;
+          yMin = mid - 0.5;
+        }
+        const margin = 0.08 * (yMax - yMin);
+        this.yMin = yMin - margin;
+        this.yMax = yMax + margin;
+      }
+
+      clear() {
+        const { ctx, canvas } = this;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      draw() {
+        const { ctx, canvas, padding } = this;
+        this.clear();
+
+        // Plot area
+        const x0 = padding.left;
+        const y0 = padding.top;
+        const w = canvas.width - padding.left - padding.right;
+        const h = canvas.height - padding.top - padding.bottom;
+
+        // Axes box
+        ctx.save();
+        ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x0, y0, w, h);
+
+        // Grid + ticks
+        this.drawGrid(ctx, x0, y0, w, h);
+
+        // Curves
+        this.drawCurve(ctx, this.times, this.waterTemps, x0, y0, w, h, '#22d3ee');
+        this.drawCurve(ctx, this.times, this.metalTemps, x0, y0, w, h, '#f59e0b');
+
+        // Equilibrium marker (horizontal dotted)
+        const yEq = this.mapY(this.eqTemp, y0, h);
+        ctx.setLineDash([6, 6]);
+        ctx.strokeStyle = '#7c3aed';
+        ctx.beginPath();
+        ctx.moveTo(x0, yEq);
+        ctx.lineTo(x0 + w, yEq);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Axis labels
+        ctx.fillStyle = 'rgba(229,231,235,0.9)';
+        ctx.font = '12px ui-sans-serif, system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('time (s)', x0 + w / 2, y0 + h + 26);
+        ctx.save();
+        ctx.translate(14, y0 + h / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.fillText('temperature (°C)', 0, 0);
+        ctx.restore();
+
+        ctx.restore();
+      }
+
+      drawGrid(ctx, x0, y0, w, h) {
+        const tMax = this.tMax;
+        const yMin = this.yMin;
+        const yMax = this.yMax;
+
+        // Nice ticks for X (time)
+        const xTicks = this.niceTicks(0, tMax, 6);
+        ctx.strokeStyle = 'rgba(148,163,184,0.18)';
+        ctx.fillStyle = 'rgba(148,163,184,0.8)';
+        ctx.lineWidth = 1;
+        ctx.font = '11px ui-sans-serif, system-ui';
+        ctx.textAlign = 'center';
+        for (const t of xTicks) {
+          const x = this.mapX(t, x0, w);
+          ctx.beginPath();
+          ctx.moveTo(x, y0);
+          ctx.lineTo(x, y0 + h);
+          ctx.stroke();
+          ctx.fillText(fmt(t, 0), x, y0 + h + 16);
+        }
+
+        // Nice ticks for Y (temperature)
+        const yTicks = this.niceTicks(yMin, yMax, 6);
+        ctx.textAlign = 'right';
+        for (const yv of yTicks) {
+          const y = this.mapY(yv, y0, h);
+          ctx.beginPath();
+          ctx.moveTo(x0, y);
+          ctx.lineTo(x0 + w, y);
+          ctx.stroke();
+          ctx.fillText(fmt(yv, 1), x0 - 8, y + 4);
+        }
+      }
+
+      drawCurve(ctx, xs, ys, x0, y0, w, h, color) {
+        if (!xs || xs.length === 0) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < xs.length; i++) {
+          const x = this.mapX(xs[i], x0, w);
+          const y = this.mapY(ys[i], y0, h);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      mapX(t, x0, w) {
+        const ratio = this.tMax === 0 ? 0 : (t / this.tMax);
+        return x0 + clamp(ratio, 0, 1) * w;
+      }
+
+      mapY(temp, y0, h) {
+        const ratio = (temp - this.yMin) / (this.yMax - this.yMin);
+        return y0 + (1 - clamp(ratio, 0, 1)) * h;
+      }
+
+      niceTicks(min, max, count) {
+        // Simple nice scale generator similar to D3's ticks
+        const span = max - min;
+        if (span <= 0 || !Number.isFinite(span)) return [min];
+        const step0 = Math.pow(10, Math.floor(Math.log10(span / count)));
+        const err = (count * step0) / span;
+        let step = step0;
+        if (err <= 0.15) step = step0 * 10;
+        else if (err <= 0.35) step = step0 * 5;
+        else if (err <= 0.75) step = step0 * 2;
+        const tStart = Math.ceil(min / step) * step;
+        const ticks = [];
+        for (let t = tStart; t <= max + 1e-9; t += step) ticks.push(Number(t.toFixed(12)));
+        return ticks;
+      }
+    }
+
+    // UI hookup and run loop
+    const ui = {
+      material: document.getElementById('material'),
+      metalMass: document.getElementById('metalMass'),
+      metalT0: document.getElementById('metalT0'),
+      qLoss: document.getElementById('qLoss'),
+      waterMass: document.getElementById('waterMass'),
+      waterT0: document.getElementById('waterT0'),
+      kCoupling: document.getElementById('kCoupling'),
+      dt: document.getElementById('dt'),
+      totalTime: document.getElementById('totalTime'),
+      eqT: document.getElementById('eqT'),
+      metalT0Eff: document.getElementById('metalT0Eff'),
+      qMetal: document.getElementById('qMetal'),
+      qWater: document.getElementById('qWater'),
+      btnApply: document.getElementById('applyBtn'),
+      btnStart: document.getElementById('startBtn'),
+      btnPause: document.getElementById('pauseBtn'),
+      btnReset: document.getElementById('resetBtn'),
+      canvas: document.getElementById('plot')
+    };
+
+    let plot = new LinePlot(ui.canvas);
+    let sim = null;
+    let rafId = null;
+
+    function readParams() {
+      const materialKey = String(ui.material.value);
+      const mat = MATERIALS[materialKey];
+      const metalMassG = num(ui.metalMass.value, 100);
+      const metalMassKg = clamp(metalMassG, 1, 1e6) / 1000;
+      const metalSpecificHeat = mat.specificHeat;
+      const metalT0 = num(ui.metalT0.value, 90);
+      const qLoss = Math.max(0, num(ui.qLoss.value, 0));
+      const waterMassG = num(ui.waterMass.value, 200);
+      const waterMassKg = clamp(waterMassG, 1, 1e7) / 1000;
+      const waterT0 = num(ui.waterT0.value, 25);
+      const kCoupling = Math.max(0.0001, num(ui.kCoupling.value, 12));
+      const dt = Math.max(0.0001, num(ui.dt.value, 0.1));
+      const totalTime = Math.max(dt, num(ui.totalTime.value, 240));
+
+      // Effective metal T after pre-insertion heat loss
+      const deltaTFromLoss = qLoss / (metalMassKg * metalSpecificHeat);
+      const effectiveMetalT0 = metalT0 - deltaTFromLoss;
+
+      // Predicted equilibrium temperature
+      const numerator = waterMassKg * WATER_SPECIFIC_HEAT * waterT0 + metalMassKg * metalSpecificHeat * effectiveMetalT0;
+      const denominator = waterMassKg * WATER_SPECIFIC_HEAT + metalMassKg * metalSpecificHeat;
+      const eqTemp = numerator / denominator;
+
+      // Energetics to reach equilibrium
+      const qMetalToWater = metalMassKg * metalSpecificHeat * (effectiveMetalT0 - eqTemp);
+      const qWaterFromMetal = waterMassKg * WATER_SPECIFIC_HEAT * (eqTemp - waterT0);
+
+      const params = {
+        materialKey,
+        materialName: mat.name,
+        metalMassKg,
+        metalSpecificHeat,
+        metalT0,
+        effectiveMetalT0,
+        qLoss,
+        waterMassKg,
+        waterT0,
+        kCoupling,
+        dt,
+        totalTime,
+        eqTemp,
+        qMetalToWater,
+        qWaterFromMetal
+      };
+
+      return params;
+    }
+
+    function applyParams() {
+      const p = readParams();
+      ui.metalT0Eff.textContent = fmt(p.effectiveMetalT0, 2);
+      ui.eqT.textContent = fmt(p.eqTemp, 2);
+      ui.qMetal.textContent = `${fmt(p.qMetalToWater, 1)}`;
+      ui.qWater.textContent = `${fmt(p.qWaterFromMetal, 1)}`;
+
+      sim = new CalorimeterSimulation({
+        metalMassKg: p.metalMassKg,
+        metalSpecificHeat: p.metalSpecificHeat,
+        waterMassKg: p.waterMassKg,
+        waterT0: p.waterT0,
+        effectiveMetalT0: p.effectiveMetalT0,
+        kCoupling: p.kCoupling,
+        dt: p.dt,
+        totalTime: p.totalTime
+      });
+
+      plot.setData(sim.times, sim.waterTemps, sim.metalTemps, p.eqTemp, p.totalTime);
+      plot.draw();
+    }
+
+    function start() {
+      if (!sim) applyParams();
+      cancelAnimationFrame(rafId);
+      const p = readParams();
+      const stepPerFrame = Math.max(1, Math.floor(16 / (p.dt * 1000))); // pack steps per frame if dt is very small
+
+      function loop() {
+        const pLoop = readParams();
+        for (let i = 0; i < stepPerFrame; i++) {
+          if (sim.time >= pLoop.totalTime) break;
+          sim.step();
+        }
+        plot.setData(sim.times, sim.waterTemps, sim.metalTemps, pLoop.eqTemp, pLoop.totalTime);
+        plot.draw();
+        if (sim.time < pLoop.totalTime) rafId = requestAnimationFrame(loop);
+      }
+      rafId = requestAnimationFrame(loop);
+    }
+
+    function pause() {
+      cancelAnimationFrame(rafId);
+    }
+
+    function resetAll() {
+      pause();
+      applyParams();
+    }
+
+    // Wire up
+    ui.btnApply.addEventListener('click', applyParams);
+    ui.btnStart.addEventListener('click', start);
+    ui.btnPause.addEventListener('click', pause);
+    ui.btnReset.addEventListener('click', resetAll);
+
+    // Recompute metrics live when inputs change
+    const inputs = [
+      ui.material, ui.metalMass, ui.metalT0, ui.qLoss,
+      ui.waterMass, ui.waterT0, ui.kCoupling, ui.dt, ui.totalTime
+    ];
+    inputs.forEach(el => el.addEventListener('input', () => {
+      const wasRunning = !!rafId;
+      pause();
+      applyParams();
+      if (wasRunning) start();
+    }));
+
+    // Initial render
+    applyParams();
+  </script>
+</body>
+</html>
